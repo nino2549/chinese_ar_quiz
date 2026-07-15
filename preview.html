@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Chinese AR Quiz</title>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<style>
+*{box-sizing:border-box}html,body{margin:0;height:100%;font-family:system-ui,"Noto Sans Thai","Noto Sans SC",sans-serif;background:#080b18;color:#fff;overflow:hidden}
+#video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);filter:brightness(.72)}
+#veil{position:fixed;inset:0;background:radial-gradient(circle at center,transparent 0,rgba(8,11,24,.35) 70%,rgba(8,11,24,.85) 100%)}
+.top{position:fixed;top:0;left:0;right:0;padding:16px;display:flex;justify-content:space-between;z-index:5;background:linear-gradient(#080b18cc,transparent)}
+.pill{background:#11162ccc;border:1px solid #ffffff24;padding:9px 13px;border-radius:999px;font-weight:800;backdrop-filter:blur(10px)}
+#question{position:fixed;top:72px;left:50%;transform:translateX(-50%);width:min(92vw,850px);z-index:4;text-align:center;font-size:clamp(24px,4vw,44px);font-weight:900;text-shadow:0 4px 18px #000;padding:12px}
+#answers{position:fixed;left:50%;top:57%;transform:translate(-50%,-50%);width:min(94vw,920px);display:grid;grid-template-columns:1fr 1fr;gap:18px;z-index:4}
+.answer{min-height:120px;border-radius:24px;border:2px solid #ffffff55;background:#11162cbb;color:#fff;font-size:clamp(20px,3vw,32px);font-weight:900;padding:18px;display:flex;align-items:center;justify-content:center;text-align:center;backdrop-filter:blur(12px);box-shadow:0 14px 40px #0006;transition:.15s}
+.answer.hover{transform:scale(1.035);border-color:#facc15;box-shadow:0 0 0 5px #facc1533,0 14px 40px #0008}
+.answer.correct{background:#166534dd;border-color:#4ade80}.answer.wrong{background:#991b1bdd;border-color:#f87171}
+#cursor{position:fixed;width:34px;height:34px;border-radius:50%;border:4px solid #fff;background:#facc15aa;z-index:10;pointer-events:none;transform:translate(-50%,-50%);box-shadow:0 0 24px #facc15;display:none}
+#msg{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:6;background:#11162cee;border:1px solid #ffffff22;padding:12px 18px;border-radius:16px;text-align:center;max-width:92vw;backdrop-filter:blur(10px)}
+.overlay{position:fixed;inset:0;z-index:20;background:linear-gradient(160deg,#111827,#312e81);display:flex;align-items:center;justify-content:center;padding:20px}
+.panel{width:min(94vw,620px);background:#ffffff10;border:1px solid #ffffff22;border-radius:28px;padding:28px;text-align:center;box-shadow:0 25px 80px #0008}
+h1{font-size:clamp(34px,7vw,64px);margin:4px}p{line-height:1.65}button{border:0;border-radius:16px;padding:15px 22px;font-size:19px;font-weight:900;cursor:pointer;background:linear-gradient(90deg,#7c3aed,#ec4899);color:#fff}
+.small{opacity:.75;font-size:14px}#resultScore{font-size:56px;font-weight:1000;color:#facc15}
+@media(max-width:650px){#answers{gap:10px;top:59%}.answer{min-height:98px;border-radius:18px;padding:10px}#question{top:64px}}
+</style>
+</head>
+<body>
+<video id="video" autoplay playsinline muted></video><div id="veil"></div>
+<div class="top"><div class="pill" id="progress">ข้อ 1/30</div><div class="pill" id="score">คะแนน 0</div></div>
+<div id="question"></div><div id="answers"></div><div id="cursor"></div>
+<div id="msg">ยกนิ้วชี้ไปที่คำตอบ แล้วค้างประมาณ 1 วินาที</div>
+
+<div class="overlay" id="start">
+ <div class="panel"><h1>🇨🇳 AR Chinese Quiz</h1>
+ <p>ใช้กล้องโน้ตบุ๊กและนิ้วชี้เลือกคำตอบ<br>ยกนิ้วชี้ไปยังตัวเลือกแล้วค้างไว้ประมาณ 1 วินาที</p>
+ <button onclick="startGame()">เปิดกล้องและเริ่มเล่น</button>
+ <p class="small">ต้องเปิดผ่าน HTTPS เช่น GitHub Pages • อนุญาตสิทธิ์ใช้งานกล้องเมื่อเบราว์เซอร์ถาม<br>ถ้าตรวจจับมือไม่ได้ ยังใช้เมาส์หรือแตะหน้าจอได้</p></div>
+</div>
+<div class="overlay" id="result" style="display:none"><div class="panel"><h1>🏆 จบเกม</h1><div id="resultScore"></div><p id="resultText"></p><button onclick="location.reload()">เล่นใหม่</button></div></div>
+
+<script>
+const BANK=[{"q": "我 อ่านว่าอะไร?", "choices": ["nǐ", "wǒ", "tā", "shì"], "answer": 1, "explain": "我 = wǒ = ฉัน"}, {"q": "你 แปลว่าอะไร?", "choices": ["ฉัน", "คุณ/เธอ", "เขา", "พวกเรา"], "answer": 1, "explain": "你 = nǐ = คุณ/เธอ"}, {"q": "她 หมายถึงใคร?", "choices": ["ผู้ชาย", "ผู้หญิง", "คุณครู", "ผู้อำนวยการ"], "answer": 1, "explain": "她 = tā = เขา/เธอผู้หญิง"}, {"q": "他 หมายถึงใคร?", "choices": ["ผู้ชาย", "ผู้หญิง", "เพื่อนหลายคน", "คุณ"], "answer": 0, "explain": "他 = tā = เขาผู้ชาย"}, {"q": "你好 แปลว่าอะไร?", "choices": ["ลาก่อน", "สวัสดี", "ขอบคุณ", "ขอโทษ"], "answer": 1, "explain": "你好 = nǐ hǎo = สวัสดี"}, {"q": "你们好 ใช้ทักทายแบบใด?", "choices": ["สวัสดีคุณครู", "สวัสดีทุกคน", "สวัสดีตอนเช้า", "ลาก่อน"], "answer": 1, "explain": "你们好 = สวัสดีพวกคุณ/สวัสดีทุกคน"}, {"q": "您好 แสดงความหมายใด?", "choices": ["สวัสดีแบบสุภาพ", "ลาก่อน", "ไม่เป็นไร", "ขอบคุณ"], "answer": 0, "explain": "您好 = nín hǎo ใช้ทักทายอย่างสุภาพ"}, {"q": "老师好 ใช้ทักทายใคร?", "choices": ["เพื่อน", "คุณครู", "ผู้อำนวยการ", "นักเรียน"], "answer": 1, "explain": "老师 = คุณครู"}, {"q": "校长好 ใช้ทักทายใคร?", "choices": ["เพื่อน", "ครู", "ผู้อำนวยการโรงเรียน", "พ่อแม่"], "answer": 2, "explain": "校长 = ผู้อำนวยการโรงเรียน"}, {"q": "早上好 แปลว่าอะไร?", "choices": ["สวัสดีตอนเช้า", "ราตรีสวัสดิ์", "ลาก่อน", "ยินดีที่รู้จัก"], "answer": 0, "explain": "早上好 = สวัสดีตอนเช้า"}, {"q": "再见 แปลว่าอะไร?", "choices": ["สวัสดี", "ลาก่อน", "ขอบคุณ", "ขอโทษ"], "answer": 1, "explain": "再见 = ลาก่อน/พบกันใหม่"}, {"q": "你叫什么名字？ แปลว่าอะไร?", "choices": ["คุณเป็นใคร", "คุณชื่ออะไร", "คุณอยู่ที่ไหน", "คุณสบายดีไหม"], "answer": 1, "explain": "叫 = ชื่อ/เรียก, 名字 = ชื่อ"}, {"q": "我叫小明。 แปลว่าอะไร?", "choices": ["ฉันชื่อเสี่ยวหมิง", "เขาชื่อเสี่ยวหมิง", "ฉันรู้จักเสี่ยวหมิง", "เสี่ยวหมิงเป็นเพื่อน"], "answer": 0, "explain": "我叫... = ฉันชื่อ..."}, {"q": "什么 แปลว่าอะไร?", "choices": ["ใคร", "อะไร", "ที่ไหน", "เมื่อไร"], "answer": 1, "explain": "什么 = shénme = อะไร"}, {"q": "名字 แปลว่าอะไร?", "choices": ["ชื่อ", "เพื่อน", "ครู", "นักเรียน"], "answer": 0, "explain": "名字 = míngzi = ชื่อ"}, {"q": "朋友 แปลว่าอะไร?", "choices": ["ครู", "เพื่อน", "พี่ชาย", "นักเรียน"], "answer": 1, "explain": "朋友 = péngyou = เพื่อน"}, {"q": "认识 แปลว่าอะไร?", "choices": ["รู้จัก", "ชอบ", "เรียน", "พูด"], "answer": 0, "explain": "认识 = rènshi = รู้จัก"}, {"q": "高兴 แปลว่าอะไร?", "choices": ["เสียใจ", "ดีใจ", "เหนื่อย", "กลัว"], "answer": 1, "explain": "高兴 = gāoxìng = ดีใจ"}, {"q": "很 แปลว่าอะไร?", "choices": ["มาก", "ไม่", "ก็", "ของ"], "answer": 0, "explain": "很 = hěn = มาก"}, {"q": "我很高兴认识你。 แปลว่าอะไร?", "choices": ["ฉันไม่รู้จักคุณ", "ฉันดีใจที่ได้รู้จักคุณ", "ฉันชื่ออะไร", "คุณเป็นเพื่อนฉัน"], "answer": 1, "explain": "很高兴认识你 = ดีใจที่ได้รู้จักคุณ"}, {"q": "我也很高兴认识你。 คำว่า 也 แปลว่าอะไร?", "choices": ["ไม่", "ก็...เช่นกัน", "มาก", "ของ"], "answer": 1, "explain": "也 = yě = ก็...เช่นกัน"}, {"q": "她是谁呢？ แปลว่าอะไร?", "choices": ["เธอชื่ออะไร", "เธอเป็นใคร", "เธออยู่ไหน", "เธอสบายดีไหม"], "answer": 1, "explain": "谁 = ใคร"}, {"q": "她是我的朋友。 แปลว่าอะไร?", "choices": ["เธอเป็นครูของฉัน", "เธอเป็นเพื่อนของฉัน", "เธอไม่ใช่เพื่อนฉัน", "เธอเป็นนักเรียน"], "answer": 1, "explain": "我的朋友 = เพื่อนของฉัน"}, {"q": "他是你的朋友吗？ แปลว่าอะไร?", "choices": ["เขาเป็นเพื่อนของคุณไหม", "เขาชื่ออะไร", "เขาเป็นใคร", "เขาอยู่ที่ไหน"], "answer": 0, "explain": "吗 ทำให้ประโยคเป็นคำถามใช่/ไม่ใช่"}, {"q": "吗 ทำหน้าที่อะไร?", "choices": ["แสดงความเป็นเจ้าของ", "ทำให้เป็นคำถาม", "แปลว่า มาก", "แปลว่า ไม่"], "answer": 1, "explain": "吗 วางท้ายประโยคเพื่อสร้างคำถามแบบใช่/ไม่ใช่"}, {"q": "不 แปลว่าอะไร?", "choices": ["ใช่", "ไม่", "มาก", "ก็"], "answer": 1, "explain": "不 = bù = ไม่"}, {"q": "不是 แปลว่าอะไร?", "choices": ["ไม่ใช่", "เป็น", "รู้จัก", "เพื่อน"], "answer": 0, "explain": "不 + 是 = ไม่ใช่"}, {"q": "他们 แปลว่าอะไร?", "choices": ["พวกเรา", "พวกเขา", "พวกคุณ", "พวกครู"], "answer": 1, "explain": "他 + 们 = พวกเขา"}, {"q": "我们 แปลว่าอะไร?", "choices": ["พวกเรา", "พวกเขา", "พวกคุณ", "พวกเพื่อน"], "answer": 0, "explain": "我 + 们 = พวกเรา"}, {"q": "พินอินของ 朋友 คือข้อใด?", "choices": ["péngyou", "gāoxìng", "rènshi", "míngzi"], "answer": 0, "explain": "朋友 อ่านว่า péngyou"}];
+let quiz=[],current=0,score=0,locked=false,hoverIndex=-1,hoverStart=0;
+const video=document.getElementById('video'), cursor=document.getElementById('cursor');
+
+function shuffle(a){return [...a].sort(()=>Math.random()-.5)}
+async function startGame(){
+ document.getElementById('start').style.display='none';
+ quiz=shuffle(BANK).map(q=>{const c=shuffle(q.choices.map((t,i)=>({t,i})));return {...q,c}});
+ render();
+ try{
+  const hands=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+  hands.setOptions({maxNumHands:1,modelComplexity:1,minDetectionConfidence:.65,minTrackingConfidence:.55});
+  hands.onResults(onResults);
+  const camera=new Camera(video,{onFrame:async()=>await hands.send({image:video}),width:1280,height:720});
+  camera.start();
+ }catch(e){document.getElementById('msg').textContent='เปิดกล้องไม่ได้ กรุณาใช้เมาส์หรือแตะคำตอบ';}
+}
+function render(){
+ locked=false;hoverIndex=-1;hoverStart=0;
+ const q=quiz[current];document.getElementById('question').textContent=q.q;
+ document.getElementById('progress').textContent=`ข้อ ${current+1}/${quiz.length}`;
+ document.getElementById('score').textContent=`คะแนน ${score}`;
+ const box=document.getElementById('answers');box.innerHTML='';
+ q.c.forEach((ch,idx)=>{let b=document.createElement('button');b.className='answer';b.textContent=ch.t;b.onclick=()=>choose(idx);box.appendChild(b)})
+ document.getElementById('msg').textContent='ยกนิ้วชี้ไปที่คำตอบ แล้วค้างประมาณ 1 วินาที';
+}
+function choose(idx){
+ if(locked)return;locked=true;
+ const q=quiz[current],buttons=[...document.querySelectorAll('.answer')],selected=q.c[idx].i,ok=selected===q.answer;
+ if(ok)score++;
+ buttons.forEach((b,i)=>{if(q.c[i].i===q.answer)b.classList.add('correct')});
+ if(!ok)buttons[idx].classList.add('wrong');
+ document.getElementById('score').textContent=`คะแนน ${score}`;
+ document.getElementById('msg').textContent=(ok?'✅ ถูกต้อง! ':'❌ ยังไม่ถูก ') + q.explain;
+ setTimeout(()=>{current++; if(current<quiz.length)render();else finish()},1800);
+}
+function finish(){
+ document.getElementById('result').style.display='flex';
+ document.getElementById('resultScore').textContent=`${score} / ${quiz.length}`;
+ document.getElementById('resultText').textContent=score>=27?'ยอดเยี่ยมมาก พร้อมสอบแล้ว!':score>=22?'ทำได้ดีมาก ทบทวนอีกเล็กน้อย':'ลองทบทวนแล้วเล่นใหม่อีกครั้ง';
+}
+function onResults(res){
+ if(!res.multiHandLandmarks||!res.multiHandLandmarks.length){cursor.style.display='none';clearHover();return}
+ const tip=res.multiHandLandmarks[0][8];
+ const x=(1-tip.x)*innerWidth,y=tip.y*innerHeight;
+ cursor.style.display='block';cursor.style.left=x+'px';cursor.style.top=y+'px';
+ const els=[...document.querySelectorAll('.answer')];let hit=-1;
+ els.forEach((el,i)=>{const r=el.getBoundingClientRect();if(x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom)hit=i});
+ els.forEach((el,i)=>el.classList.toggle('hover',i===hit));
+ if(hit<0||locked){hoverIndex=-1;hoverStart=0;return}
+ if(hit!==hoverIndex){hoverIndex=hit;hoverStart=performance.now()}
+ else if(performance.now()-hoverStart>900){choose(hit);hoverIndex=-1;hoverStart=0}
+}
+function clearHover(){document.querySelectorAll('.answer').forEach(e=>e.classList.remove('hover'));hoverIndex=-1;hoverStart=0}
+</script>
+</body></html>
