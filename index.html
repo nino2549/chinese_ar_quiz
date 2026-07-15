@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Chinese AR Classroom</title>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;font-family:system-ui,"Noto Sans Thai","Noto Sans SC",sans-serif;background:#07111f;color:#fff}
+video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);filter:brightness(.72) saturate(1.12)}
+.classroom{position:fixed;inset:0;pointer-events:none;background:
+linear-gradient(to bottom,rgba(21,73,103,.18),transparent 35%),
+linear-gradient(to top,rgba(50,26,10,.55) 0 16%,transparent 16%),
+radial-gradient(circle at 50% 42%,transparent 0 46%,rgba(0,0,0,.42) 100%)}
+.board{position:fixed;top:66px;left:50%;transform:translateX(-50%);width:min(82vw,880px);height:170px;background:linear-gradient(#173f35,#0e2d28);border:12px solid #8b5a2b;border-radius:15px;box-shadow:0 20px 45px #0008;z-index:2;text-align:center;padding:12px}
+.board .cn{font-size:clamp(38px,6vw,72px);font-weight:1000}.board .prompt{font-size:clamp(17px,2.2vw,28px);opacity:.95}
+.hud{position:fixed;top:10px;left:10px;right:10px;display:flex;justify-content:space-between;z-index:9;gap:8px}
+.pill{padding:9px 13px;border-radius:999px;background:#091427cc;border:1px solid #ffffff2b;backdrop-filter:blur(10px);font-weight:900}
+#answers{position:fixed;left:50%;top:61%;transform:translate(-50%,-50%);width:min(93vw,980px);display:grid;grid-template-columns:1fr 1fr;gap:16px;z-index:4}
+.answer{min-height:112px;border:3px solid #ffffff55;border-radius:24px;background:linear-gradient(145deg,#17213ddd,#0d1430dd);color:white;font-size:clamp(21px,3vw,34px);font-weight:1000;padding:14px;box-shadow:0 16px 35px #0008;backdrop-filter:blur(10px);transition:.15s}
+.answer.hover{transform:scale(1.045);border-color:#fde047;box-shadow:0 0 0 7px #fde04733,0 16px 35px #0008}
+.answer.correct{background:#166534e8;border-color:#4ade80}.answer.wrong{background:#991b1be8;border-color:#fb7185}
+#cursor{position:fixed;width:38px;height:38px;border:4px solid white;border-radius:50%;background:#facc15aa;z-index:20;pointer-events:none;transform:translate(-50%,-50%);display:none;box-shadow:0 0 28px #facc15}
+#panda{position:fixed;right:18px;bottom:16px;z-index:7;width:150px;height:150px;filter:drop-shadow(0 12px 18px #0008);animation:bob 2s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(-8px)}}
+.panda-face{position:absolute;inset:25px 20px 10px;background:white;border-radius:50% 50% 45% 45%;border:5px solid #111}
+.ear{position:absolute;width:48px;height:48px;background:#111;border-radius:50%;top:6px}.ear.l{left:13px}.ear.r{right:13px}
+.eye{position:absolute;width:35px;height:46px;background:#111;border-radius:55%;top:40px;transform:rotate(18deg)}.eye.l{left:24px}.eye.r{right:24px;transform:rotate(-18deg)}.eye:after{content:"";position:absolute;width:10px;height:14px;background:white;border-radius:50%;left:12px;top:8px}
+.nose{position:absolute;width:24px;height:17px;background:#111;border-radius:50%;left:50%;top:86px;transform:translateX(-50%)}
+#bubble{position:fixed;right:145px;bottom:95px;max-width:330px;background:#fff;color:#17213d;border-radius:22px;padding:13px 16px;font-weight:800;z-index:8;box-shadow:0 10px 35px #0005}
+#bubble:after{content:"";position:absolute;right:-15px;bottom:20px;border:16px solid transparent;border-left-color:#fff}
+#timerbar{position:fixed;left:0;bottom:0;height:8px;background:linear-gradient(90deg,#22c55e,#fde047,#ef4444);z-index:15;width:100%;transform-origin:left}
+.overlay{position:fixed;inset:0;z-index:30;background:linear-gradient(145deg,#07111fee,#312e81ee);display:flex;align-items:center;justify-content:center;padding:18px}
+.panel{width:min(94vw,680px);background:#ffffff12;border:1px solid #ffffff25;border-radius:30px;padding:28px;text-align:center;box-shadow:0 24px 80px #0009;backdrop-filter:blur(16px)}
+h1{font-size:clamp(34px,7vw,66px);margin:0 0 8px}button.startBtn{border:0;border-radius:18px;padding:15px 24px;background:linear-gradient(90deg,#7c3aed,#ec4899);color:#fff;font-size:20px;font-weight:1000;cursor:pointer}
+#stars{position:fixed;inset:0;pointer-events:none;z-index:25}.star{position:absolute;font-size:38px;animation:boom 900ms ease-out forwards}
+@keyframes boom{0%{opacity:1;transform:translate(0,0) scale(.4) rotate(0)}100%{opacity:0;transform:translate(var(--x),var(--y)) scale(1.5) rotate(260deg)}}
+.boss{animation:bossGlow 1s infinite alternate}@keyframes bossGlow{from{box-shadow:0 0 15px #f59e0b}to{box-shadow:0 0 55px #ef4444}}
+#levelLock{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}.lvl{padding:12px;border-radius:14px;background:#ffffff10;border:1px solid #ffffff22}.locked{opacity:.35;filter:grayscale(1)}
+@media(max-width:650px){.board{width:92vw;height:150px;top:58px}#answers{top:60%;gap:10px}.answer{min-height:96px;border-radius:18px}#panda{width:105px;height:105px}#bubble{right:100px;bottom:72px;max-width:220px;font-size:13px}}
+</style>
+</head>
+<body>
+<video id="video" autoplay muted playsinline></video><div class="classroom"></div>
+<div class="hud"><div class="pill" id="stage">ด่าน 1</div><div class="pill" id="hearts">❤️❤️❤️</div><div class="pill" id="coins">🪙 0</div><div class="pill" id="score">⭐ 0</div></div>
+<div class="board" id="board"><div class="cn" id="cn"></div><div class="prompt" id="prompt"></div></div>
+<div id="answers"></div><div id="cursor"></div><div id="stars"></div><div id="timerbar"></div>
+<div id="bubble">สวัสดี! ฉันชื่อเป่าเปา 🐼 ใช้นิ้วชี้จับคำตอบนะ</div>
+<div id="panda"><div class="ear l"></div><div class="ear r"></div><div class="panda-face"><div class="eye l"></div><div class="eye r"></div><div class="nose"></div></div></div>
+
+<div class="overlay" id="start">
+<div class="panel"><h1>🎮 Chinese AR Classroom</h1>
+<p>ใช้กล้องจริงเป็นพื้นหลัง • ใช้นิ้วชี้ “จับ” คำตอบ • มีหัวใจ เวลา เหรียญ Boss Stage และแพนด้านำทาง</p>
+<div id="levelLock"><div class="lvl">ด่าน 1<br>คำศัพท์</div><div class="lvl locked" id="l2">ด่าน 2<br>บทสนทนา</div><div class="lvl locked" id="l3">ด่าน 3<br>Boss</div></div>
+<button class="startBtn" onclick="startGame()">เปิดกล้องและเริ่มเกม</button>
+<p style="opacity:.72;font-size:14px">ใช้ Chrome/Edge ผ่าน GitHub Pages (HTTPS) และกดอนุญาตกล้อง<br>เสียงจีนใช้ระบบอ่านข้อความของเบราว์เซอร์</p></div></div>
+
+<div class="overlay" id="result" style="display:none"><div class="panel"><h1>🏆 จบเกม</h1><div id="final" style="font-size:54px;font-weight:1000;color:#fde047"></div><p id="finalMsg"></p><button class="startBtn" onclick="location.reload()">เล่นใหม่</button></div></div>
+
+<script>
+const BANK=[{"q": "我", "prompt": "คำนี้อ่านว่าอะไร?", "choices": ["wǒ", "nǐ", "tā", "shì"], "answer": 0, "speak": "我，wǒ，我"}, {"q": "你", "prompt": "คำนี้แปลว่าอะไร?", "choices": ["ฉัน", "คุณ", "เขา", "เพื่อน"], "answer": 1, "speak": "你，nǐ"}, {"q": "她", "prompt": "คำนี้หมายถึงใคร?", "choices": ["ผู้ชาย", "ผู้หญิง", "คุณครู", "ผู้อำนวยการ"], "answer": 1, "speak": "她，tā"}, {"q": "他", "prompt": "คำนี้หมายถึงใคร?", "choices": ["ผู้ชาย", "ผู้หญิง", "เพื่อนหลายคน", "คุณ"], "answer": 0, "speak": "他，tā"}, {"q": "你好", "prompt": "แปลว่าอะไร?", "choices": ["ลาก่อน", "สวัสดี", "ขอบคุณ", "ขอโทษ"], "answer": 1, "speak": "你好，nǐ hǎo"}, {"q": "你们好", "prompt": "แปลว่าอะไร?", "choices": ["สวัสดีคุณครู", "สวัสดีทุกคน", "สวัสดีตอนเช้า", "ลาก่อน"], "answer": 1, "speak": "你们好，nǐmen hǎo"}, {"q": "您好", "prompt": "ใช้ในความหมายใด?", "choices": ["สวัสดีแบบสุภาพ", "ลาก่อน", "ไม่เป็นไร", "ขอบคุณ"], "answer": 0, "speak": "您好，nín hǎo"}, {"q": "老师好", "prompt": "ใช้ทักทายใคร?", "choices": ["เพื่อน", "คุณครู", "ผู้อำนวยการ", "นักเรียน"], "answer": 1, "speak": "老师好，lǎoshī hǎo"}, {"q": "校长好", "prompt": "ใช้ทักทายใคร?", "choices": ["เพื่อน", "ครู", "ผู้อำนวยการโรงเรียน", "พ่อแม่"], "answer": 2, "speak": "校长好，xiàozhǎng hǎo"}, {"q": "早上好", "prompt": "แปลว่าอะไร?", "choices": ["สวัสดีตอนเช้า", "ราตรีสวัสดิ์", "ลาก่อน", "ยินดีที่รู้จัก"], "answer": 0, "speak": "早上好，zǎoshang hǎo"}, {"q": "再见", "prompt": "Boss Stage: แปลว่าอะไร?", "choices": ["สวัสดี", "ลาก่อน", "ขอบคุณ", "ขอโทษ"], "answer": 1, "speak": "再见，zàijiàn"}, {"q": "你叫什么名字？", "prompt": "แปลว่าอะไร?", "choices": ["คุณเป็นใคร", "คุณชื่ออะไร", "คุณอยู่ที่ไหน", "คุณสบายดีไหม"], "answer": 1, "speak": "你叫什么名字？"}, {"q": "我叫小明。", "prompt": "แปลว่าอะไร?", "choices": ["ฉันชื่อเสี่ยวหมิง", "เขาชื่อเสี่ยวหมิง", "ฉันรู้จักเสี่ยวหมิง", "เสี่ยวหมิงเป็นเพื่อน"], "answer": 0, "speak": "我叫小明。"}, {"q": "什么", "prompt": "แปลว่าอะไร?", "choices": ["ใคร", "อะไร", "ที่ไหน", "เมื่อไร"], "answer": 1, "speak": "什么，shénme"}, {"q": "名字", "prompt": "แปลว่าอะไร?", "choices": ["ชื่อ", "เพื่อน", "ครู", "นักเรียน"], "answer": 0, "speak": "名字，míngzi"}, {"q": "朋友", "prompt": "แปลว่าอะไร?", "choices": ["ครู", "เพื่อน", "พี่ชาย", "นักเรียน"], "answer": 1, "speak": "朋友，péngyou"}, {"q": "认识", "prompt": "แปลว่าอะไร?", "choices": ["รู้จัก", "ชอบ", "เรียน", "พูด"], "answer": 0, "speak": "认识，rènshi"}, {"q": "高兴", "prompt": "แปลว่าอะไร?", "choices": ["เสียใจ", "ดีใจ", "เหนื่อย", "กลัว"], "answer": 1, "speak": "高兴，gāoxìng"}, {"q": "很", "prompt": "แปลว่าอะไร?", "choices": ["มาก", "ไม่", "ก็", "ของ"], "answer": 0, "speak": "很，hěn"}, {"q": "我很高兴认识你。", "prompt": "แปลว่าอะไร?", "choices": ["ฉันไม่รู้จักคุณ", "ฉันดีใจที่ได้รู้จักคุณ", "ฉันชื่ออะไร", "คุณเป็นเพื่อนฉัน"], "answer": 1, "speak": "我很高兴认识你。"}, {"q": "也", "prompt": "Boss Stage: แปลว่าอะไร?", "choices": ["ไม่", "ก็...เช่นกัน", "มาก", "ของ"], "answer": 1, "speak": "也，yě"}, {"q": "她是谁呢？", "prompt": "แปลว่าอะไร?", "choices": ["เธอชื่ออะไร", "เธอเป็นใคร", "เธออยู่ไหน", "เธอสบายดีไหม"], "answer": 1, "speak": "她是谁呢？"}, {"q": "她是我的朋友。", "prompt": "แปลว่าอะไร?", "choices": ["เธอเป็นครูของฉัน", "เธอเป็นเพื่อนของฉัน", "เธอไม่ใช่เพื่อนฉัน", "เธอเป็นนักเรียน"], "answer": 1, "speak": "她是我的朋友。"}, {"q": "他是你的朋友吗？", "prompt": "แปลว่าอะไร?", "choices": ["เขาเป็นเพื่อนของคุณไหม", "เขาชื่ออะไร", "เขาเป็นใคร", "เขาอยู่ที่ไหน"], "answer": 0, "speak": "他是你的朋友吗？"}, {"q": "吗", "prompt": "ทำหน้าที่อะไร?", "choices": ["แสดงความเป็นเจ้าของ", "ทำให้เป็นคำถาม", "แปลว่า มาก", "แปลว่า ไม่"], "answer": 1, "speak": "吗，ma"}, {"q": "不", "prompt": "แปลว่าอะไร?", "choices": ["ใช่", "ไม่", "มาก", "ก็"], "answer": 1, "speak": "不，bù"}, {"q": "不是", "prompt": "แปลว่าอะไร?", "choices": ["ไม่ใช่", "เป็น", "รู้จัก", "เพื่อน"], "answer": 0, "speak": "不是，bú shì"}, {"q": "他们", "prompt": "แปลว่าอะไร?", "choices": ["พวกเรา", "พวกเขา", "พวกคุณ", "พวกครู"], "answer": 1, "speak": "他们，tāmen"}, {"q": "我们", "prompt": "แปลว่าอะไร?", "choices": ["พวกเรา", "พวกเขา", "พวกคุณ", "พวกเพื่อน"], "answer": 0, "speak": "我们，wǒmen"}, {"q": "朋友", "prompt": "Boss Stage: พินอินคือข้อใด?", "choices": ["péngyou", "gāoxìng", "rènshi", "míngzi"], "answer": 0, "speak": "朋友，péngyou"}];
+let quiz=[],idx=0,score=0,coins=0,hearts=3,locked=false,hover=-1,hoverAt=0,timeLeft=12,timerId=null;
+const video=document.getElementById('video'), cursor=document.getElementById('cursor');
+function shuffle(a){return [...a].sort(()=>Math.random()-.5)}
+function say(text){try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang='zh-CN';u.rate=.82;speechSynthesis.speak(u)}catch(e){}}
+async function startGame(){
+ document.getElementById('start').style.display='none';
+ quiz=BANK.map(q=>{const c=shuffle(q.choices.map((t,i)=>({t,i})));return {...q,c}});
+ render();
+ try{
+  const hands=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+  hands.setOptions({maxNumHands:1,modelComplexity:1,minDetectionConfidence:.65,minTrackingConfidence:.55});
+  hands.onResults(onHands);
+  const cam=new Camera(video,{onFrame:async()=>await hands.send({image:video}),width:1280,height:720});
+  cam.start();
+ }catch(e){bubble('กล้องไม่ทำงาน ใช้เมาส์หรือแตะคำตอบแทนได้')} 
+}
+function render(){
+ clearInterval(timerId);locked=false;hover=-1;hoverAt=0;timeLeft=(idx%10===9)?16:12;
+ const q=quiz[idx], boss=idx%10===9;
+ document.getElementById('cn').textContent=q.q;document.getElementById('prompt').textContent=q.prompt;
+ document.getElementById('stage').textContent=boss?`👑 BOSS ${Math.floor(idx/10)+1}`:`ด่าน ${Math.floor(idx/10)+1} • ข้อ ${idx+1}/30`;
+ document.getElementById('board').classList.toggle('boss',boss);
+ const box=document.getElementById('answers');box.innerHTML='';
+ q.c.forEach((ch,i)=>{const b=document.createElement('button');b.className='answer';b.textContent=ch.t;b.onclick=()=>choose(i);box.appendChild(b)});
+ updateHUD();bubble(boss?'ระวัง! Boss Stage ข้อนี้มีเวลาเพิ่ม แต่เสียหัวใจ 2 ดวงถ้าผิด':'ชี้นิ้วไปที่คำตอบแล้วค้างไว้ 0.8 วินาที');
+ say(q.speak);
+ timerId=setInterval(()=>{timeLeft-=.1;document.getElementById('timerbar').style.transform=`scaleX(${Math.max(0,timeLeft/((boss)?16:12))})`;if(timeLeft<=0)timeout()},100);
+}
+function updateHUD(){document.getElementById('hearts').textContent='❤️'.repeat(Math.max(0,hearts))+'🖤'.repeat(Math.max(0,3-hearts));document.getElementById('coins').textContent='🪙 '+coins;document.getElementById('score').textContent='⭐ '+score}
+function bubble(t){document.getElementById('bubble').textContent=t}
+function choose(i){
+ if(locked)return;locked=true;clearInterval(timerId);
+ const q=quiz[idx], ok=q.c[i].i===q.answer, boss=idx%10===9, btn=[...document.querySelectorAll('.answer')];
+ btn.forEach((b,k)=>{if(q.c[k].i===q.answer)b.classList.add('correct')});
+ if(ok){score+=boss?20:10;coins+=boss?5:2;burst(innerWidth/2,innerHeight/2);bubble('เก่งมาก! ตอบถูก ⭐');say('答对了！太棒了！')}
+ else{btn[i].classList.add('wrong');hearts-=boss?2:1;bubble('ยังไม่ถูก คำตอบที่ถูกคือ '+q.choices[q.answer]);say('再试一次')}
+ updateHUD();unlockLevels();
+ setTimeout(next,1600);
+}
+function timeout(){if(locked)return;locked=true;clearInterval(timerId);hearts--;updateHUD();bubble('หมดเวลา! เสีย 1 หัวใจ');setTimeout(next,1300)}
+function next(){
+ if(hearts<=0){finish(false);return}
+ idx++;if(idx>=quiz.length)finish(true);else render();
+}
+function finish(win){document.getElementById('result').style.display='flex';document.getElementById('final').textContent=`${score} คะแนน • 🪙 ${coins}`;document.getElementById('finalMsg').textContent=win?'ผ่านครบทั้ง 3 ด่านแล้ว!':'หัวใจหมด ลองเล่นใหม่อีกครั้ง'}
+function unlockLevels(){if(coins>=10)document.getElementById('l2')?.classList.remove('locked');if(coins>=25)document.getElementById('l3')?.classList.remove('locked')}
+function burst(x,y){const s=document.getElementById('stars');for(let i=0;i<16;i++){const e=document.createElement('div');e.className='star';e.textContent='⭐';e.style.left=x+'px';e.style.top=y+'px';e.style.setProperty('--x',(Math.random()*360-180)+'px');e.style.setProperty('--y',(Math.random()*300-190)+'px');s.appendChild(e);setTimeout(()=>e.remove(),950)}}
+function onHands(r){
+ if(!r.multiHandLandmarks?.length){cursor.style.display='none';return}
+ const p=r.multiHandLandmarks[0][8],x=(1-p.x)*innerWidth,y=p.y*innerHeight;cursor.style.display='block';cursor.style.left=x+'px';cursor.style.top=y+'px';
+ let hit=-1;const els=[...document.querySelectorAll('.answer')];els.forEach((e,i)=>{const b=e.getBoundingClientRect();if(x>b.left&&x<b.right&&y>b.top&&y<b.bottom)hit=i;e.classList.toggle('hover',i===hit)});
+ if(hit<0||locked){hover=-1;hoverAt=0;return}if(hit!==hover){hover=hit;hoverAt=performance.now()}else if(performance.now()-hoverAt>800){choose(hit);hover=-1;hoverAt=0}
+}
+</script>
+</body></html>
